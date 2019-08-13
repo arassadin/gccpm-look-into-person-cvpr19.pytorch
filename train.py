@@ -28,11 +28,10 @@ dtst_val = LipValDataset if DATASET == 'LIP' else COCO2017ValDataset
 evlt = val_lip.evaluate if DATASET == 'lIP' else val_coco.evaluate
 
 
-def validate(epoch, net, scheduler):
+def validate(epoch, net, val_dataset, scheduler):
     print('Validation...')
     net.eval()
     predictions_name = '{}/val_{}_results.csv'.format(checkpoints_folder, DATASET)
-    val_dataset = dtst_val(images_folder, eval_num)
     evlt(val_dataset, predictions_name, net)
     pck = calc_pckh(val_dataset.labels_file_path, predictions_name, eval_num=1000)
     val_loss = 100 - pck[-1][-1]  # 100 - avg_pckh
@@ -47,14 +46,15 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
     net = SinglePersonPoseEstimationWithMobileNet(num_refinement_stages, num_heatmaps=18).cuda()
     stride = 8
     sigma = 7
-    dataset = dtst_train(images_folder, stride, sigma,
+    train_dataset = dtst_train(images_folder, stride, sigma,
                               transform=transforms.Compose([
                                    SinglePersonBodyMasking(),
                                    ChannelPermutation(),
                                    SinglePersonRotate(pad=(128, 128, 128), max_rotate_degree=40),
                                    SinglePersonCropPad(pad=(128, 128, 128), crop_x=256, crop_y=256),
                                    SinglePersonFlip()]))
-    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_dataset = dtst_val(images_folder, eval_num)
 
     optimizer = optim.Adam([
         {'params': get_parameters_conv(net.model, 'weight')},
@@ -125,7 +125,7 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                     #       loss_idx + 1, total_losses[loss_idx] / log_after))
                 for loss_idx in range(N_losses):
                     total_losses[loss_idx] = 0
-                validate(epochId, net, scheduler)
+                validate(epochId, net, val_dataset, scheduler)
 
         snapshot_name = '{}/{}_epoch_last.pth'.format(checkpoints_folder, DATASET)
         torch.save({'state_dict': net.module.state_dict(),
@@ -144,7 +144,7 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                         'current_epoch': epochId},
                         snapshot_name)
 
-        validate(epochID, net, scheduler)
+        validate(epochID, net, val_dataset, scheduler)
 
 
 if __name__ == '__main__':
