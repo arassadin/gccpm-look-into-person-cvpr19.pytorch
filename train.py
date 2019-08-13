@@ -110,7 +110,9 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                 total_losses[loss_idx] += loss.item()
 
             optimizer.zero_grad()
-            loss = torch.sum(losses)
+            loss = losses[1]
+            for i in range(N_losses):
+                loss += losses[i]
             loss.backward()
             optimizer.step()
 
