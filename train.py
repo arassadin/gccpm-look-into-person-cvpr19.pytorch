@@ -120,7 +120,7 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                 for loss_idx in range(len(total_losses)):
                     total_losses[loss_idx] = 0
 
-        snapshot_name = '{}/checkpoint_last_epoch.pth'.format(checkpoints_folder)
+        snapshot_name = '{}/{}_epoch_last.pth'.format(checkpoints_folder, DATASET)
         torch.save({'state_dict': net.module.state_dict(),
                     'optimizer': optimizer.state_dict(),
                     'scheduler': scheduler.state_dict(),
@@ -128,7 +128,7 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                     'current_epoch': epochId},
                    snapshot_name)
         if (epochId + 1) % checkpoint_after == 0:
-            snapshot_name = '{}/checkpoint_epoch_{}.pth'.format(checkpoints_folder, epochId)
+            snapshot_name = '{}/{}_epoch_{}.pth'.format(checkpoints_folder, DATASET, epochId)
             torch.save({'state_dict': net.module.state_dict(),
                         'optimizer': optimizer.state_dict(),
                         'scheduler': scheduler.state_dict(),
@@ -139,7 +139,7 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
         net.eval()
         eval_num = 1000
         val_dataset = dtst_val(images_folder, eval_num) 
-        predictions_name = '{}/val_results.csv'.format(checkpoints_folder)
+        predictions_name = '{}/val_{}_results.csv'.format(checkpoints_folder, DATASET)
         evlt(val_dataset, predictions_name, net)
         pck = calc_pckh(val_dataset.labels_file_path, predictions_name, eval_num=eval_num)
 
