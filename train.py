@@ -28,6 +28,19 @@ dtst_val = LipValDataset if DATASET == 'LIP' else COCO2017ValDataset
 evlt = val_lip.evaluate if DATASET == 'lIP' else val_coco.evaluate
 
 
+def validate(epoch, net, scheduler):
+    print('Validation...')
+    net.eval()
+    predictions_name = '{}/val_{}_results.csv'.format(checkpoints_folder, DATASET)
+    val_dataset = dtst_val(images_folder, eval_num)
+    evlt(val_dataset, predictions_name, net)
+    pck = calc_pckh(val_dataset.labels_file_path, predictions_name, eval_num=1000)
+    val_loss = 100 - pck[-1][-1]  # 100 - avg_pckh
+    print('Val loss: {}'.format(val_loss))
+    scheduler.step(val_loss, epoch)
+    net.train()
+
+
 def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per_iter,
           num_workers, checkpoint_path, weights_only, from_mobilenet, checkpoints_folder,
           log_after, checkpoint_after):
@@ -64,9 +77,9 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
     num_iter = 0
     current_epoch = 0
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1, patience=5, threshold=1e-2, verbose=True)
+
     if checkpoint_path:
         checkpoint = torch.load(checkpoint_path)
-
         if from_mobilenet:
             load_from_mobilenet(net, checkpoint)
         else:
@@ -82,43 +95,35 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
     net.train()
     for epochId in range(current_epoch, 100):
         print('Epoch: {}'.format(epochId))
-        net.train()
-        total_losses = [0] * (num_refinement_stages + 1)  # heatmaps loss per stage
-        batch_per_iter_idx = 0
-        for batch_data in train_loader:
-            if batch_per_iter_idx == 0:
-                optimizer.zero_grad()
-
-            images = batch_data['image'].cuda()
-            keypoint_maps = batch_data['keypoint_maps'].cuda()
+        N_losses = num_refinement_stages + 1
+        total_losses = [0] * N_losses  # heatmaps loss per stage
+        for batch in train_loader:
+            images = batch['image'].cuda()
+            keypoint_maps = batch['keypoint_maps'].cuda()
 
             stages_output = net(images)
 
             losses = []
-            for loss_idx in range(len(total_losses)):
-                losses.append(l2_loss(stages_output[loss_idx], keypoint_maps, images.shape[0]))
-                total_losses[loss_idx] += losses[-1].item() / batches_per_iter
+            for loss_idx in range(N_losses):
+                loss = l2_loss(stages_output[loss_idx], keypoint_maps, len(images))
+                losses.append(loss)
+                total_losses[loss_idx] += loss.item()
 
-            loss = losses[0]
-            for loss_idx in range(1, len(losses)):
-                loss += losses[loss_idx]
-            loss /= batches_per_iter
+            optimizer.zero_grad()
+            loss = torch.sum(losses)
             loss.backward()
-            batch_per_iter_idx += 1
-            if batch_per_iter_idx == batches_per_iter:
-                optimizer.step()
-                batch_per_iter_idx = 0
-                num_iter += 1
-            else:
-                continue
+            optimizer.step()
+
+            num_iter += 1
 
             if num_iter % log_after == 0:
                 print('Iter: {}'.format(num_iter))
-                for loss_idx in range(len(total_losses)):
-                    print('\n'.join(['stage{}_heatmaps_loss: {}']).format(
-                        loss_idx + 1, total_losses[loss_idx] / log_after))
-                for loss_idx in range(len(total_losses)):
+                # for loss_idx in range(N_losses):
+                    # print('\n'.join(['stage{}_heatmaps_loss: {}']).format(
+                    #       loss_idx + 1, total_losses[loss_idx] / log_after))
+                for loss_idx in range(N_losses):
                     total_losses[loss_idx] = 0
+                validate(epochID, net, scheduler)
 
         snapshot_name = '{}/{}_epoch_last.pth'.format(checkpoints_folder, DATASET)
         torch.save({'state_dict': net.module.state_dict(),
@@ -126,26 +131,18 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                     'scheduler': scheduler.state_dict(),
                     'iter': num_iter,
                     'current_epoch': epochId},
-                   snapshot_name)
-        if (epochId + 1) % checkpoint_after == 0:
+                     snapshot_name)
+
+        if epochId % checkpoint_after == 0:
             snapshot_name = '{}/{}_epoch_{}.pth'.format(checkpoints_folder, DATASET, epochId)
             torch.save({'state_dict': net.module.state_dict(),
                         'optimizer': optimizer.state_dict(),
                         'scheduler': scheduler.state_dict(),
                         'iter': num_iter,
                         'current_epoch': epochId},
-                       snapshot_name)
-        print('Validation...')
-        net.eval()
-        eval_num = 1000
-        val_dataset = dtst_val(images_folder, eval_num) 
-        predictions_name = '{}/val_{}_results.csv'.format(checkpoints_folder, DATASET)
-        evlt(val_dataset, predictions_name, net)
-        pck = calc_pckh(val_dataset.labels_file_path, predictions_name, eval_num=eval_num)
+                        snapshot_name)
 
-        val_loss = 100 - pck[-1][-1]  # 100 - avg_pckh
-        print('Val loss: {}'.format(val_loss))
-        scheduler.step(val_loss, epochId)
+        validate(epochID, net, scheduler)
 
 
 if __name__ == '__main__':

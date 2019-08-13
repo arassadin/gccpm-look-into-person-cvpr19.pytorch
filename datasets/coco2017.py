@@ -111,7 +111,7 @@ class COCO2017ValDataset(Dataset):
         if num_images > 0:
             self.annotations = self.annotations[:num_images]
 
-    def __getitem__(self, id):
+    def __getitem__(self, idx):
         img_path = str(self.annotations[idx])['image_id'].zfill(12) + '.jpg'
         image = cv2.imread(os.path.join(self._dataset_folder, 'val2017', img_path), cv2.IMREAD_COLOR)
         sample = {
