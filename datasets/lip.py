@@ -18,11 +18,11 @@ class LipTrainDataset(Dataset):
         self._sigma = sigma
         self._transform = transform
         self._labels = [line.rstrip('\n') for line in
-                        open(os.path.join(self._dataset_folder, 'TrainVal_pose_annotations', 'lip_train_set.csv'), 'r')]
+                        open(os.path.join(self._dataset_folder, 'lip_train_set.csv'), 'r')]
 
     def __getitem__(self, idx):
         tokens = self._labels[idx].split(',')
-        image = cv2.imread(os.path.join(self._dataset_folder, 'TrainVal_images', 'train_images', tokens[0]), cv2.IMREAD_COLOR)
+        image = cv2.imread(os.path.join(self._dataset_folder, 'train_images', tokens[0]), cv2.IMREAD_COLOR)
         h, w, c = image.shape
         if random.random() > 0.5:
             center_x = random.randint(w//3, w-1-w//3)
@@ -105,14 +105,14 @@ class LipValDataset(Dataset):
     def __init__(self, dataset_folder, num_images=-1):
         super().__init__()
         self._dataset_folder = dataset_folder
-        self.labels_file_path = os.path.join(self._dataset_folder, 'TrainVal_pose_annotations', 'lip_val_set.csv')
+        self.labels_file_path = os.path.join(self._dataset_folder, 'lip_val_set.csv')
         self._labels = [line.rstrip('\n') for line in open(self.labels_file_path, 'r')]
         if num_images > 0:
             self._labels = self._labels[:num_images]
 
     def __getitem__(self, id):
         tokens = self._labels[id].split(',')
-        image = cv2.imread(os.path.join(self._dataset_folder, 'TrainVal_images', 'val_images', tokens[0]), cv2.IMREAD_COLOR)
+        image = cv2.imread(os.path.join(self._dataset_folder, 'val_images', tokens[0]), cv2.IMREAD_COLOR)
         sample = {
             'image': image,
             'file_name': tokens[0]
@@ -127,11 +127,11 @@ class LipTestDataset(Dataset):
     def __init__(self, dataset_folder):
         super().__init__()
         self._dataset_folder = dataset_folder
-        self._names = [line.rstrip('\n') for line in open(os.path.join(self._dataset_folder, 'Testing_images', 'test_id.txt'), 'r')]
+        self._names = [line.rstrip('\n') for line in open(os.path.join(self._dataset_folder, 'test_id.txt'), 'r')]
 
     def __getitem__(self, id):
         name = '{}.jpg'.format(self._names[id])
-        img = cv2.imread(os.path.join(self._dataset_folder, 'Testing_images', 'testing_images', name))
+        img = cv2.imread(os.path.join(self._dataset_folder, 'testing_images', name))
         sample = {
             'image': img,
             'file_name': name

@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 
 from datasets.lip import LipTrainDataset, LipValDataset
+from datasets.coco2017 import COCO2017TrainDataset, COCO2017ValDataset
 from datasets.transformations import SinglePersonRotate, SinglePersonCropPad, SinglePersonFlip, SinglePersonBodyMasking,\
     ChannelPermutation
 from modules.calc_pckh import calc_pckh
@@ -16,19 +17,24 @@ from modules.get_parameters import get_parameters_conv, get_parameters_bn, get_p
 from models.single_person_pose_with_mobilenet import SinglePersonPoseEstimationWithMobileNet
 from modules.loss import l2_loss
 from modules.load_state import load_state, load_from_mobilenet
-from val import evaluate
+import val_lip, val_coco
 
 cv2.setNumThreads(0)
 cv2.ocl.setUseOpenCL(False)  # To prevent freeze of DataLoader
+
+DATASET = 'COCO2017'
+dtst_train = LipTrainDataset if DATASET == 'LIP' else COCO2017TrainDataset
+dtst_val = LipValDataset if DATASET == 'LIP' else COCO2017ValDataset
+evlt = val_lip.evaluate if DATASET == 'lIP' else val_coco.evaluate
 
 
 def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per_iter,
           num_workers, checkpoint_path, weights_only, from_mobilenet, checkpoints_folder,
           log_after, checkpoint_after):
-    net = SinglePersonPoseEstimationWithMobileNet(num_refinement_stages).cuda()
+    net = SinglePersonPoseEstimationWithMobileNet(num_refinement_stages, num_heatmaps=18).cuda()
     stride = 8
     sigma = 7
-    dataset = LipTrainDataset(images_folder, stride, sigma,
+    dataset = dtst_train(images_folder, stride, sigma,
                               transform=transforms.Compose([
                                    SinglePersonBodyMasking(),
                                    ChannelPermutation(),
@@ -132,9 +138,9 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
         print('Validation...')
         net.eval()
         eval_num = 1000
-        val_dataset = LipValDataset(images_folder, eval_num)
+        val_dataset = dtst_val(images_folder, eval_num) 
         predictions_name = '{}/val_results.csv'.format(checkpoints_folder)
-        evaluate(val_dataset, predictions_name, net)
+        evlt(val_dataset, predictions_name, net)
         pck = calc_pckh(val_dataset.labels_file_path, predictions_name, eval_num=eval_num)
 
         val_loss = 100 - pck[-1][-1]  # 100 - avg_pckh
