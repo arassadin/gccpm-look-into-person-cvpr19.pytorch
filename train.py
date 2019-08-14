@@ -26,6 +26,9 @@ dtst_train = LipTrainDataset if DATASET == 'LIP' else COCO2017TrainDataset
 dtst_val = LipValDataset if DATASET == 'LIP' else COCO2017ValDataset
 evlt = val_lip.evaluate if DATASET == 'lIP' else val_coco.evaluate
 
+STRIDE = 8
+SIGMA = 7
+
 
 def validate2(epoch, net, val_dataset, scheduler):
     print('Validation...')
@@ -60,9 +63,8 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
           num_workers, checkpoint_path, weights_only, from_mobilenet, checkpoints_folder,
           log_after, checkpoint_after):
     net = SinglePersonPoseEstimationWithMobileNet(num_refinement_stages, num_heatmaps=18).cuda()
-    stride = 8
-    sigma = 7
-    train_dataset = dtst_train(images_folder, stride, sigma,
+
+    train_dataset = dtst_train(images_folder, STRIDE, SIGMA,
                               transform=transforms.Compose([
                                    SinglePersonBodyMasking(),
                                    ChannelPermutation(),
@@ -70,7 +72,9 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                                    SinglePersonCropPad(pad=(128, 128, 128), crop_x=256, crop_y=256),
                                    SinglePersonFlip()]))
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    val_dataset = dtst_val(images_folder, 100)
+
+    val_dataset = dtst_val(images_folder, STRIDE, SIGMA)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
     optimizer = optim.Adam([
         {'params': get_parameters_conv(net.model, 'weight')},
