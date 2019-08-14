@@ -145,7 +145,7 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                     #       loss_idx + 1, total_losses[loss_idx] / log_after))
                 for loss_idx in range(N_losses):
                     total_losses[loss_idx] = 0
-                validate2(epochId, net, val_dataset, scheduler)
+                validate2(epochId, net, val_loader, scheduler)
 
         snapshot_name = '{}/{}_epoch_last.pth'.format(checkpoints_folder, DATASET)
         torch.save({'state_dict': net.module.state_dict(),
@@ -164,7 +164,7 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                         'current_epoch': epochId},
                         snapshot_name)
 
-        validate2(epochID, net, val_dataset, scheduler)
+        validate2(epochID, net, val_loader, scheduler)
 
 
 if __name__ == '__main__':
