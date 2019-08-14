@@ -9,6 +9,7 @@ from datasets.lip import LipValDataset
 from models.single_person_pose_with_mobilenet import SinglePersonPoseEstimationWithMobileNet
 from modules.calc_pckh import calc_pckh
 from modules.load_state import load_state
+from modules.calc_pckh import calc_pckh_2
 
 N_KPTS = 17
 
@@ -59,16 +60,15 @@ def infer(net, img, scales, base_height, stride, img_mean=[128, 128, 128], img_s
 
 
 def evaluate(dataset, output_name, net, multiscale=False, visualize=False):
-    net = net.cuda().eval()
+    net.eval()
+
     base_height = 256
     scales = [1]
     if multiscale:
         scales = [0.75, 1.0, 1.25]
     stride = 8
 
-    res_file = open(output_name, 'w')
-    for sample_id in range(len(dataset)):
-        sample = dataset[sample_id]
+    for sample in dataset:
         file_name = sample['file_name']
         img = sample['image']
 
@@ -89,13 +89,13 @@ def evaluate(dataset, output_name, net, multiscale=False, visualize=False):
         for kpt_idx in range(N_KPTS):
             all_keypoints.append(extract_keypoints(avg_heatmaps[:, :, kpt_idx]))
 
-        res_file.write('{}'.format(file_name))
-        for id in range(N_KPTS):
-            val = [int(all_keypoints[id][0]), int(all_keypoints[id][1])]
-            if val[0] == -1:
-                val[0], val[1] = 'nan', 'nan'
-            res_file.write(',{},{}'.format(val[0], val[1]))
-        res_file.write('\n')
+        # res_file.write('{}'.format(file_name))
+        # for id in range(N_KPTS):
+        #     val = [int(all_keypoints[id][0]), int(all_keypoints[id][1])]
+        #     if val[0] == -1:
+        #         val[0], val[1] = 'nan', 'nan'
+        #     res_file.write(',{},{}'.format(val[0], val[1]))
+        # res_file.write('\n')
 
         if visualize:
             kpt_names = ['r_ank', 'r_kne', 'r_hip', 'l_hip', 'l_kne', 'l_ank', 'pel', 'spi', 'nec', 'hea',
@@ -118,7 +118,9 @@ def evaluate(dataset, output_name, net, multiscale=False, visualize=False):
             if key == 27:  # esc
                 sys.exit()
 
-    res_file.close()
+    pck = calc_pckh_2(val_dataset.labels_file_path, predictions_name, eval_num=1000)
+
+    return pck
 
 
 if __name__ == '__main__':

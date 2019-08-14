@@ -10,56 +10,20 @@ from torch.utils.data.dataset import Dataset
 
 NUM_KEYPOINTS = 17
 
-class COCO2017TrainDataset(Dataset):
 
-    def __init__(self, dataset_folder, stride, sigma, transform=None):
+class COCO2017DatasetBase(Dataset):
+
+    def __init__(self, dataset_folder, stride, sigma):
         super().__init__()
         self._dataset_folder = dataset_folder
         self._stride = stride
         self._sigma = sigma
-        self._transform = transform
-
-        annotations = json.load(open(os.path.join(dataset_folder, 
-                                                 'annotations', 
-                                                 'person_keypoints_train2017.json')))
-        self.annotations = annotations['annotations']
 
     def __getitem__(self, idx):
-        ann = self.annotations[idx]
-        img_path = str(ann['image_id']).zfill(12) + '.jpg'
-        image = cv2.imread(os.path.join(self._dataset_folder, 'train2017', img_path), cv2.IMREAD_COLOR)
-        h, w, c = image.shape
-        if random.random() > 0.5:
-            center_x = random.randint(w//3, w-1-w//3)
-            center_y = random.randint(h//3, h-1-h//3)
-            percentage = 0.3
-            kpt = [
-                [center_x - random.randint(1, int(w*percentage)), center_y - random.randint(1, int(h*percentage))],
-                [center_x + random.randint(1, int(w*percentage)), center_y - random.randint(1, int(h*percentage))],
-                [center_x + random.randint(1, int(w*percentage)), center_y + random.randint(1, int(h*percentage))],
-                [center_x - random.randint(1, int(w*percentage)), center_y + random.randint(1, int(h*percentage))]
-                ]
-            cv2.fillConvexPoly(image, np.array(kpt, dtype=np.int32), (128, 128, 128))
-
-        keypoints = np.asarray(ann['keypoints'], dtype=np.float32)
-
-        sample = {
-            'keypoints': keypoints,
-            'image': image,
-        }
-        if self._transform:
-            sample = self._transform(sample)
-
-        keypoint_maps = self._generate_keypoint_maps(sample)
-        sample['keypoint_maps'] = keypoint_maps
-
-        image = sample['image'].astype(np.float32)
-        image = (image - 128) / 256
-        sample['image'] = image.transpose((2, 0, 1))
-        return sample
+        raise NotImplementedError
 
     def __len__(self):
-        return len(self.annotations)
+        raise NotImplementedError
 
     def _generate_keypoint_maps(self, sample):
         n_rows, n_cols, _ = sample['image'].shape
@@ -99,11 +63,58 @@ class COCO2017TrainDataset(Dataset):
                     keypoint_map[map_y, map_x] = 1
 
 
-class COCO2017ValDataset(Dataset):
+class COCO2017TrainDataset(COCO2017DatasetBase):
+
+    def __init__(self, dataset_folder, stride, sigma, transform=None):
+        super().__init__(, dataset_folder, stride, sigma)
+        self._transform = transform
+
+        annotations = json.load(open(os.path.join(dataset_folder, 
+                                                 'annotations', 
+                                                 'person_keypoints_train2017.json')))
+        self.annotations = annotations['annotations']
+
+    def __getitem__(self, idx):
+        ann = self.annotations[idx]
+        img_path = str(ann['image_id']).zfill(12) + '.jpg'
+        image = cv2.imread(os.path.join(self._dataset_folder, 'train2017', img_path), cv2.IMREAD_COLOR)
+        h, w, c = image.shape
+        if random.random() > 0.5:
+            center_x = random.randint(w//3, w-1-w//3)
+            center_y = random.randint(h//3, h-1-h//3)
+            percentage = 0.3
+            kpt = [
+                [center_x - random.randint(1, int(w*percentage)), center_y - random.randint(1, int(h*percentage))],
+                [center_x + random.randint(1, int(w*percentage)), center_y - random.randint(1, int(h*percentage))],
+                [center_x + random.randint(1, int(w*percentage)), center_y + random.randint(1, int(h*percentage))],
+                [center_x - random.randint(1, int(w*percentage)), center_y + random.randint(1, int(h*percentage))]
+                ]
+            cv2.fillConvexPoly(image, np.array(kpt, dtype=np.int32), (128, 128, 128))
+
+        sample = {
+            'keypoints': np.asarray(ann['keypoints'], dtype=np.float32),
+            'image': image,
+        }
+        if self._transform:
+            sample = self._transform(sample)
+
+        keypoint_maps = self._generate_keypoint_maps(sample)
+        sample['keypoint_maps'] = keypoint_maps
+
+        image = sample['image'].astype(np.float32)
+        image = (image - 128) / 256
+        sample['image'] = image.transpose((2, 0, 1))
+        return sample
+
+    def __len__(self):
+        return len(self.annotations)
+
+
+class COCO2017ValDataset(COCO2017DatasetBase):
 
     def __init__(self, dataset_folder, num_images=-1):
-        super().__init__()
-        self._dataset_folder = dataset_folder
+        super().__init__(, dataset_folder, stride, sigma)
+
         annotations = json.load(open(os.path.join(dataset_folder, 
                                                  'annotations', 
                                                  'person_keypoints_val2017.json')))
@@ -112,12 +123,21 @@ class COCO2017ValDataset(Dataset):
             self.annotations = self.annotations[:num_images]
 
     def __getitem__(self, idx):
-        img_path = str(self.annotations[idx])['image_id'].zfill(12) + '.jpg'
+        ann = self.annotations[idx]
+        img_path = str(ann['image_id']).zfill(12) + '.jpg'
         image = cv2.imread(os.path.join(self._dataset_folder, 'val2017', img_path), cv2.IMREAD_COLOR)
+
         sample = {
+            'keypoints': np.asarray(ann['keypoints'], dtype=np.float32),
             'image': image,
-            'file_name': img_path
         }
+
+        keypoint_maps = self._generate_keypoint_maps(sample)
+        sample['keypoint_maps'] = keypoint_maps
+
+        image = sample['image'].astype(np.float32)
+        image = (image - 128) / 256
+        sample['image'] = image.transpose((2, 0, 1))
         return sample
 
     def __len__(self):

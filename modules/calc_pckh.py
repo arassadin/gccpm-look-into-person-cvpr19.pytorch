@@ -41,6 +41,15 @@ def get_head_size(gt):
     return head_size
 
 
+def get_head_size_2(gt):
+    head_size = np.linalg.norm(gt[:, 9, :] - gt[:, 8, :], axis=1)
+    for n in range(gt.shape[0]):
+        if gt[n, 8, 0] < 0 or gt[n, 9, 0] < 0:
+            head_size[n] = 0
+
+    return head_size
+
+
 def get_normalized_distance(gt, prediction, head_size):
     num_images = prediction.shape[0]
     num_keypoints = prediction.shape[1]
@@ -109,6 +118,23 @@ def calc_pckh(gt_path, prediction_path, method_name='gccpm', eval_num=10000):
     assert gt.shape[2] == prediction.shape[2], 'keypoint dims not matched'
 
     head_size = get_head_size(gt)
+    normalized_distance = get_normalized_distance(gt, prediction, head_size)
+    pckh = compute_pckh(normalized_distance, threshold_range)
+    print_output(pckh[-1], method_name)
+
+    return pckh
+
+
+def calc_pckh_2(gt, prediction, method_name='gccpm', eval_num=10000):
+    threshold_range = np.array([0.5])
+
+    prediction = prediction[:eval_num, :, :]
+    gt = gt[:eval_num, :, :]
+    assert gt.shape[0] == prediction.shape[0], 'number of images not matched'
+    assert gt.shape[1] == prediction.shape[1], 'number of joints not matched'
+    assert gt.shape[2] == prediction.shape[2], 'keypoint dims not matched'
+
+    head_size = get_head_size_2(gt)
     normalized_distance = get_normalized_distance(gt, prediction, head_size)
     pckh = compute_pckh(normalized_distance, threshold_range)
     print_output(pckh[-1], method_name)

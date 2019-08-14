@@ -12,7 +12,6 @@ from datasets.lip import LipTrainDataset, LipValDataset
 from datasets.coco2017 import COCO2017TrainDataset, COCO2017ValDataset
 from datasets.transformations import SinglePersonRotate, SinglePersonCropPad, SinglePersonFlip, SinglePersonBodyMasking,\
     ChannelPermutation
-from modules.calc_pckh import calc_pckh
 from modules.get_parameters import get_parameters_conv, get_parameters_bn, get_parameters_conv_depthwise
 from models.single_person_pose_with_mobilenet import SinglePersonPoseEstimationWithMobileNet
 from modules.loss import l2_loss
@@ -28,15 +27,32 @@ dtst_val = LipValDataset if DATASET == 'LIP' else COCO2017ValDataset
 evlt = val_lip.evaluate if DATASET == 'lIP' else val_coco.evaluate
 
 
-def validate(epoch, net, val_dataset, scheduler):
+def validate2(epoch, net, val_dataset, scheduler):
     print('Validation...')
     net.eval()
     predictions_name = '{}/val_{}_results.csv'.format(checkpoints_folder, DATASET)
-    evlt(val_dataset, predictions_name, net)
-    pck = calc_pckh(val_dataset.labels_file_path, predictions_name, eval_num=1000)
+    pck = evlt(val_dataset, predictions_name, net)
     val_loss = 100 - pck[-1][-1]  # 100 - avg_pckh
     print('Val loss: {}'.format(val_loss))
     scheduler.step(val_loss, epoch)
+    net.train()
+
+
+def validate2(epoch, net, loader, scheduler, N_losses):
+    print('Validation...')
+    net.eval()
+    with torch.no_grad():
+        for batch in loader:
+            images = batch['image'].cuda()
+            keypoint_maps = batch['keypoint_maps'].cuda()
+
+            stages_output = net(images)
+
+            loss = 0.0
+            for loss_idx in range(N_losses):
+                loss += l2_loss(stages_output[loss_idx], keypoint_maps, len(images))
+
+    print('Val loss: {}'.format(loss))
     net.train()
 
 
@@ -54,7 +70,7 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                                    SinglePersonCropPad(pad=(128, 128, 128), crop_x=256, crop_y=256),
                                    SinglePersonFlip()]))
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
-    val_dataset = dtst_val(images_folder, eval_num)
+    val_dataset = dtst_val(images_folder, 100)
 
     optimizer = optim.Adam([
         {'params': get_parameters_conv(net.model, 'weight')},
@@ -125,7 +141,7 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                     #       loss_idx + 1, total_losses[loss_idx] / log_after))
                 for loss_idx in range(N_losses):
                     total_losses[loss_idx] = 0
-                validate(epochId, net, val_dataset, scheduler)
+                validate2(epochId, net, val_dataset, scheduler)
 
         snapshot_name = '{}/{}_epoch_last.pth'.format(checkpoints_folder, DATASET)
         torch.save({'state_dict': net.module.state_dict(),
@@ -144,7 +160,7 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                         'current_epoch': epochId},
                         snapshot_name)
 
-        validate(epochID, net, val_dataset, scheduler)
+        validate2(epochID, net, val_dataset, scheduler)
 
 
 if __name__ == '__main__':
