@@ -41,7 +41,7 @@ def validate2(epoch, net, val_dataset, scheduler):
     net.train()
 
 
-def validate2(epoch, net, loader, scheduler, N_losses):
+def validate2(epoch, net, loader, scheduler):
     print('Validation...')
     net.eval()
     with torch.no_grad():
@@ -52,10 +52,10 @@ def validate2(epoch, net, loader, scheduler, N_losses):
             stages_output = net(images)
 
             loss = 0.0
-            for loss_idx in range(N_losses):
-                loss += l2_loss(stages_output[loss_idx], keypoint_maps, len(images))
+            for out in stages_output:
+                loss += l2_loss(out, keypoint_maps, len(images))
 
-    print('Val loss: {}'.format(loss))
+            print('Val loss: {}'.format(loss))
     net.train()
 
 
@@ -74,7 +74,7 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
 
     val_dataset = dtst_val(images_folder, STRIDE, SIGMA)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     optimizer = optim.Adam([
         {'params': get_parameters_conv(net.model, 'weight')},
@@ -130,8 +130,8 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                 total_losses[loss_idx] += loss.item()
 
             optimizer.zero_grad()
-            loss = losses[1]
-            for i in range(N_losses):
+            loss = losses[0]
+            for i in range(1, N_losses):
                 loss += losses[i]
             loss.backward()
             optimizer.step()
@@ -145,7 +145,7 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                     #       loss_idx + 1, total_losses[loss_idx] / log_after))
                 for loss_idx in range(N_losses):
                     total_losses[loss_idx] = 0
-                validate2(epochId, net, val_loader, scheduler, N_losses)
+                validate2(epochId, net, val_loader, scheduler)
 
         snapshot_name = '{}/{}_epoch_last.pth'.format(checkpoints_folder, DATASET)
         torch.save({'state_dict': net.module.state_dict(),
@@ -164,7 +164,7 @@ def train(images_folder, num_refinement_stages, base_lr, batch_size, batches_per
                         'current_epoch': epochId},
                         snapshot_name)
 
-        validate2(epochID, net, val_loader, scheduler, N_losses)
+        validate2(epochID, net, val_loader, scheduler)
 
 
 if __name__ == '__main__':
