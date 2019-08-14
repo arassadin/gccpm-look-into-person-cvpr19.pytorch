@@ -112,7 +112,7 @@ class COCO2017TrainDataset(COCO2017DatasetBase):
 
 class COCO2017ValDataset(COCO2017DatasetBase):
 
-    def __init__(self, dataset_folder, num_images=-1):
+    def __init__(self, dataset_folder, stride, sigma, num_images=-1):
         super().__init__(dataset_folder, stride, sigma)
 
         annotations = json.load(open(os.path.join(dataset_folder, 
